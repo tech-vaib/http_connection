@@ -1,0 +1,68 @@
+Looking at your numbers:
+
+DNS:     0.217451s   → 217 ms  (DNS resolution)
+Connect: 0.218935s   → 219 ms  (TCP connection setup)
+TLS:     0.418068s   → 418 ms  (TLS handshake completed)
+TTFB:    0.511709s   → 512 ms  (time to first byte)
+Total:   0.511738s   → 512 ms  (full download — very small payload)
+
+Here’s what it tells us:
+Observations
+
+    DNS resolution (217 ms) is quite high.
+
+        Normally DNS should be <20 ms for a well-optimized path.
+
+        This suggests your AKS node (or your local test machine) is using a slow DNS resolver, or it’s querying an external resolver far away.
+
+    TCP connection time (219 ms) is about the same as DNS time, meaning the server might be physically far from you (network latency).
+
+    TLS handshake (418 ms) is also high. This includes the time for key exchange and certificate validation.
+
+        If network latency is high, TLS will also be slow because it needs multiple round trips.
+
+    TTFB (512 ms) isn’t much higher than TLS time, meaning the server responds almost instantly once the connection is ready — your backend is fast, the slowness is all network + DNS.
+
+How to Improve
+1. Fix DNS resolution
+
+    In AKS, check which DNS your pods/nodes are using:
+
+    cat /etc/resolv.conf
+
+    Often it’s Azure-provided DNS (168.63.129.16), but you can speed this up by:
+
+        Using Azure Private DNS Zones if the service is in your subscription.
+
+        Using a faster public DNS (Cloudflare 1.1.1.1 or Google 8.8.8.8) if you’re hitting a public endpoint.
+
+        Pre-resolving domain names (caching in your app or sidecar like dnsmasq).
+
+2. Reduce network latency
+
+    If your AKS cluster is in a different Azure region than the public endpoint, latency will be higher.
+
+    Ideally, place your AKS cluster in the same region as the endpoint’s hosting location.
+
+    Test latency directly with:
+
+    ping <hostname>
+    traceroute <hostname>
+
+    to see where time is lost.
+
+3. Speed up TLS handshake
+
+    Enable HTTP Keep-Alive in your httpx.AsyncClient (you already are, since you’re reusing clients — but check max_keepalive_connections).
+
+    If the endpoint supports HTTP/2, enable it (httpx does by default).
+
+    If it’s your server, enable TLS session resumption.
+
+4. Warm up DNS + TCP in your app
+
+Since you have a ConnectionManager in your code, you can:
+
+    Create the client once and reuse it (you are doing this).
+
+    Optionally make a dummy request to the endpoint at startup so DNS/TLS is cached before load starts.
