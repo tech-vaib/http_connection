@@ -1,0 +1,9 @@
+gcloud compute firewall-rules create allow-notebook-egress-google-apis \
+  --direction=EGRESS \
+  --priority=900 \
+  --network=your-network \
+  --action=ALLOW \
+  --rules=tcp:443 \
+  --destination-ranges=199.36.153.4/30,199.36.153.8/30,34.126.0.0/18,142.251.0.0/16,172.217.0.0/16 \
+  --target-service-accounts=PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+  --description="Allow notebook VMs to access Google APIs over HTTPS"
